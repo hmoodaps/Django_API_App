@@ -1,8 +1,11 @@
 from django.http import JsonResponse
-from rest_framework import status, mixins, generics, viewsets, filters
+from rest_framework import status, mixins, generics, viewsets, filters, permissions
+from rest_framework.authentication import BasicAuthentication, TokenAuthentication
+from rest_framework.authtoken.admin import User
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.views.decorators.csrf import csrf_exempt
 
 from .serializer import *
 
@@ -160,6 +163,8 @@ class viewsets_guest(viewsets.ModelViewSet):
     serializer_class = GuestSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name' , 'age', 'set_num']
+    authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
 
 
 
@@ -168,26 +173,73 @@ class viewsets_movie(viewsets.ModelViewSet):
     serializer_class = MovieSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['title' , 'hall' ,'date' , 'movie_time', 'available_sets' , 'all_sets']
-
+    authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
 
 
 class viewsets_reservation(viewsets.ModelViewSet):
     queryset = Reservation.objects.all()
     serializer_class = ReservationSerializer
+    authentication_classes = [TokenAuthentication]
 
-#make reservation
-def make_reservation(request):
-    movie = Movie.objects.get(
-        title = request.data['title'],
-        hall = request.data['hall'],
-    )
-    guest = Guest()
-    guest.name = request.data['name']
-    guest.age = request.data['age']
-    guest.set_num = request.data['set_num']
-    guest.save()
-    reservation = Reservation()
-    reservation.movie = movie
-    reservation.guest = guest
-    reservation.save()
-    return Response(status=status.HTTP_201_CREATED)
+    def create(self, request, *args, **kwargs):
+        movie_data = request.data.get('movie')
+        guest_data = request.data.get('guest')
+
+        # Check if the movie already exists
+        movie_qs = Movie.objects.filter(
+            title=movie_data['title'],
+            hall=movie_data['hall'],
+            date=movie_data['date']
+        )
+
+        if movie_qs.exists():
+            movie = movie_qs.first()  # Use existing movie
+        else:
+            movie = Movie.objects.create(**movie_data)  # Create new movie
+
+        # Check if the guest already exists
+        guest_qs = Guest.objects.filter(
+            name=guest_data['name'],
+            age=guest_data['age'],
+            set_num=guest_data['set_num']
+        )
+
+        if guest_qs.exists():
+            guest = guest_qs.first()  # Use existing guest
+        else:
+            guest = Guest.objects.create(**guest_data)  # Create new guest
+
+        # Check if the reservation already exists
+        reservation_qs = Reservation.objects.filter(movie=movie, guest=guest)
+        if reservation_qs.exists():
+            return Response({"detail": "Reservation already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create the Reservation instance
+        reservation = Reservation.objects.create(movie=movie, guest=guest)
+
+        # Serialize the reservation and return the response
+        serializer = self.get_serializer(reservation)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+#create superuser by username and password
+@api_view(['POST'])
+def create_superuser(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    if not username or not password:
+        return Response({"error": "Username and password required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.create_superuser(username=username, password=password)
+        # إنشاء التوكن للمستخدم
+        token, created = Token.objects.get_or_create(user=user)
+
+        return Response({
+            "message": "User created successfully",
+            "token": token.key
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -14,6 +14,10 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from rest_framework.authtoken.views import obtain_auth_token
+
+from tickets.views import create_superuser
+
 """
 the include and routers its special for the viewsets
 rest framework method
@@ -24,21 +28,27 @@ from rest_framework import routers
 from tickets import views
 
 router = routers.DefaultRouter()
-router.register('guests' , views.viewsets_guest)
-router.register('movies' , views.viewsets_movie)
-router.register('reservation' , views.viewsets_reservation)
+router.register('guests/' , views.viewsets_guest)
+router.register('movies/' , views.viewsets_movie)
+router.register('reservation/' , views.viewsets_reservation)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('no_rest_yes_model', views.no_rest_yes_model),
-    path('fbv_list', views.fbv_list),
+    #ALLOW LOGOUT FOR THE USER
+    path('api_auth/', include('rest_framework.urls')),
+    #Tokin AUTHENTICATION
+    path('auth_token/' , obtain_auth_token),
+
+    path('no_rest_yes_model/', views.no_rest_yes_model),
+    path('fbv_list/', views.fbv_list),
     path('fbv_pk/<int:pk>', views.fbv_pk),
-    path('cbv_list', views.cbv_list.as_view()),
+    path('cbv_list/', views.cbv_list.as_view()),
     path('cbv_pk/<int:pk>', views.cbv_pk.as_view()),
-    path('cbv_mx', views.cbv_mx.as_view()),
+    path('cbv_mx/', views.cbv_mx.as_view()),
     path('cbv_mx_pk/<int:pk>', views.cbv_mx_pk.as_view()),
-    path('gen', views.gen.as_view()),
+    path('gen/', views.gen.as_view()),
     path('gen_pk/<int:pk>', views.gen_pk.as_view()),
     path('viewsets/', include(router.urls)),
+    path('create-superuser/', create_superuser, name='create-superuser'),
 
 ]
